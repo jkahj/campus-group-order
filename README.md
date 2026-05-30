@@ -1,6 +1,6 @@
 # BUYCART — Group-Buying App 🛒
 
-A full-stack mobile app that lets people team up on group orders to split delivery costs.
+A full-stack mobile app that lets people anywhere team up on group orders to split delivery costs.
 Contributed as a key team member, spearheading all frontend development and backend API integration — building the React Native (Expo) client, wiring up a FastAPI + MySQL backend, real-time push notifications, image uploads, and a reputation-scoring credit-tier system.
 
 > **Author:** Jason Huang · [Portfolio](https://jkahj.github.io/portfolio) · jason.huang920922@gmail.com
@@ -26,17 +26,16 @@ Contributed as a key team member, spearheading all frontend development and back
 | Database   | MySQL (PyMySQL) |
 | Other      | Expo push notifications, image upload, reputation engine |
 
-The frontend has **25+ screens** and the backend exposes a full REST API
-(users, orders, comments, notifications, reviews, reputation tiers, likes).
+The backend exposes a full REST API covering users, orders, comments, notifications, reviews, reputation tiers, and likes.
 
 ---
 
 ## 📂 Project Structure
 
 ```
-campus-group-order/
+buycart/
 ├── frontend/          # React Native (Expo) mobile app
-│   ├── screens/       # 25+ app screens
+│   ├── screens/       # app screens
 │   ├── components/    # reusable UI components
 │   ├── utils/         # API service, auth, notifications
 │   └── config/        # API + OAuth configuration
