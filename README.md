@@ -1,7 +1,7 @@
 # BUYCART — Group-Buying App 🛒
 
-A full-stack mobile app that lets people team up on group orders to split delivery
-costs. Built as my graduation project.
+A full-stack mobile app that lets people team up on group orders to split delivery costs.
+Contributed as a key team member, spearheading all frontend development and backend API integration — building the React Native (Expo) client, wiring up a FastAPI + MySQL backend, real-time push notifications, image uploads, and a reputation-scoring credit-tier system.
 
 > **Author:** Jason Huang · [Portfolio](https://jkahj.github.io/portfolio) · jason.huang920922@gmail.com
 
