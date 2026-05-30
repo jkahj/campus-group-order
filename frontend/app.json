@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "frontend",
+    "slug": "frontend", 
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo1.png",
+    "userInterfaceStyle": "light",
+    "scheme": "frontend",
+    "splash": {
+      "image": "./assets/logo1.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jason0922.frontend",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo1.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.jason0922.frontend"
+    },
+    "web": {
+      "favicon": "./assets/logo1.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "sdkVersion": "54.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "1af5cf2d-2b7f-495d-83e1-f8acb27ea35c"
+      }
+    },
+    "owner": "jason0922"
+  }
+}

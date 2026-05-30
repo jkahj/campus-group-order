@@ -1,0 +1,24 @@
+# Render deployment blueprint for the BUYCART FastAPI backend.
+# Deploy by connecting this repo at https://dashboard.render.com (New > Blueprint).
+# You must provide a MySQL database (Render does not host MySQL natively — use a
+# free MySQL host such as Railway, Aiven, or PlanetScale-compatible service, then
+# set the DB_* environment variables below in the Render dashboard).
+
+services:
+  - type: web
+    name: buycart-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python start.py
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: buycart
