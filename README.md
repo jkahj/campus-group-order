@@ -1,6 +1,6 @@
-# BUYCART — Campus Group-Buying App 🛒
+# BUYCART — Group-Buying App 🛒
 
-A full-stack mobile app that lets students team up on group orders to split delivery
+A full-stack mobile app that lets people team up on group orders to split delivery
 costs. Built as my graduation project.
 
 > **Author:** Jason Huang · [Portfolio](https://jkahj.github.io/portfolio) · jason.huang920922@gmail.com
