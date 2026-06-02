@@ -16,10 +16,9 @@ const getApiUrl = () => {
   
   // 如果沒有環境變數，根據環境自動選擇
   if (__DEV__) {
-    // 開發環境：使用區域網路 IP
-    // 目前 IP 地址：172.20.10.3（從 ipconfig 取得）
-    // 如果 IP 地址改變，請更新此處或使用環境變數
-    return 'http://172.20.10.3:8001';
+    // 開發環境：請設定環境變數 EXPO_PUBLIC_API_URL 為你的區域網路 IP
+    // 例如：http://192.168.x.x:8001（用 ipconfig / ifconfig 取得）
+    return 'http://localhost:8001';
   }
   
   // 生產環境：使用部署後的伺服器地址
@@ -42,8 +41,11 @@ const API_CONFIG = {
   },
   
   // 生產環境（部署後使用實際的伺服器地址）
+  // 設定環境變數 EXPO_PUBLIC_API_URL 或在此填入你部署的後端網址
   production: {
-    baseURL:  'https://unmalevolent-nonrousing-cristine.ngrok-free.dev',
+    baseURL: (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_API_URL)
+      ? process.env.EXPO_PUBLIC_API_URL
+      : 'https://your-api-server.onrender.com',
     timeout: 10000,
   }
 };

@@ -707,7 +707,7 @@ def update_order(order_id: str, order_data: OrderUpdate, db: Session = Depends(g
         
         # 驗證狀態值（如果提供）
         if 'status' in data_dict:
-            valid_statuses = ['preparing', 'delivering', 'completed', 'cancelled', 'expired']
+            valid_statuses = ['preparing', 'accepted', 'delivering', 'completed', 'cancelled', 'expired']
             if data_dict['status'] not in valid_statuses:
                 raise HTTPException(
                     status_code=400, 
@@ -2095,23 +2095,74 @@ def create_tier_history(entry: TierHistoryCreate, db: Session = Depends(get_db))
     if not data_dict.get("new_tier"):
         raise HTTPException(status_code=400, detail="缺少 new_tier")
 
-    if not data_dict.get("id"):
-        data_dict["id"] = f"tier_{int(datetime.now().timestamp() * 1000)}"
+    user_id = data_dict.get("user_id")
+    
+    # 驗證用戶是否存在
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"用戶不存在: {user_id}")
+
+    # 設置預設值
     if not data_dict.get("timestamp"):
         data_dict["timestamp"] = int(datetime.now().timestamp() * 1000)
     if not data_dict.get("type"):
         data_dict["type"] = "upgrade"
+    
+    # 檢查是否已存在相同的記錄（相同的 user_id, old_tier, new_tier, timestamp）
+    # 避免重複創建相同的等級變動記錄
+    existing_similar = db.query(TierHistory).filter(
+        TierHistory.user_id == user_id,
+        TierHistory.old_tier == data_dict.get("old_tier"),
+        TierHistory.new_tier == data_dict.get("new_tier"),
+        TierHistory.timestamp == data_dict.get("timestamp")
+    ).first()
+    
+    if existing_similar:
+        logger.info("等級歷史記錄已存在（相同內容），返回既有資料 id=%s user_id=%s", existing_similar.id, user_id)
+        return existing_similar
+    
+    # 生成 ID（如果沒有提供）
+    if not data_dict.get("id"):
+        data_dict["id"] = f"tier_{int(datetime.now().timestamp() * 1000)}_{uuid4().hex[:8]}"
+    
+    # 確保 ID 唯一（如果已存在，生成新的）
+    max_retries = 5
+    for attempt in range(max_retries):
+        existing = db.query(TierHistory).filter(TierHistory.id == data_dict.get("id")).first()
+        if not existing:
+            break
+        # 如果 ID 已存在，生成新的 ID
+        data_dict["id"] = f"tier_{int(datetime.now().timestamp() * 1000)}_{uuid4().hex[:8]}"
+        if attempt == max_retries - 1:
+            logger.warning("無法生成唯一的 tier history ID，使用最後生成的 ID")
 
     try:
         db_entry = TierHistory(**data_dict)
         db.add(db_entry)
         db.commit()
         db.refresh(db_entry)
+        logger.info("成功建立等級歷史記錄 user_id=%s old_tier=%s new_tier=%s", user_id, data_dict.get("old_tier"), data_dict.get("new_tier"))
         return db_entry
     except Exception as error:
         db.rollback()
-        logger.error("新增等級紀錄失敗 user_id=%s error=%s", data_dict.get("user_id"), error)
-        raise HTTPException(status_code=500, detail=f"新增等級記錄失敗: {error}")
+        error_detail = str(error)
+        logger.error("新增等級紀錄失敗 user_id=%s error=%s", user_id, error_detail)
+        
+        # 檢查是否為重複主鍵錯誤
+        if "Duplicate entry" in error_detail or "UNIQUE constraint" in error_detail or "already exists" in error_detail.lower() or "PRIMARY KEY" in error_detail.upper():
+            try:
+                existing = db.query(TierHistory).filter(TierHistory.id == data_dict.get("id")).first()
+                if existing:
+                    logger.info("檢測到並發創建，返回既有資料 id=%s", data_dict.get("id"))
+                    return existing
+            except Exception:
+                pass
+        
+        # 檢查是否為外鍵約束錯誤
+        if "foreign key" in error_detail.lower() or "FOREIGN KEY constraint" in error_detail:
+            raise HTTPException(status_code=404, detail=f"用戶不存在: {user_id}")
+        
+        raise HTTPException(status_code=500, detail=f"新增等級記錄失敗: {error_detail}")
 
 
 @app.get("/tier-history")

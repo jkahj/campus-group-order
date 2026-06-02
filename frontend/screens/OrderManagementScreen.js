@@ -1280,6 +1280,7 @@ export default function OrderManagementScreen({ navigation, route }) {
             
             return {
               ...order,
+              status: 'accepted', // 更新訂單狀態為 accepted
               joiners: [...(order.joiners || []), newJoiner],
               joined: (order.joined || 0) + 1
             };
@@ -1303,6 +1304,7 @@ export default function OrderManagementScreen({ navigation, route }) {
             
             return {
               ...order,
+              status: 'accepted', // 更新訂單狀態為 accepted
               joiners: updatedJoiners
             };
           }
@@ -1314,11 +1316,13 @@ export default function OrderManagementScreen({ navigation, route }) {
       
       // 同步更新後端資料庫
       try {
-        // 更新訂單的參與者資訊
+        // 更新訂單狀態為 accepted
         await databaseService.updateOrder(orderData.id, {
+          status: 'accepted',
           joiners: updatedOrders.find(o => o.id === orderData.id)?.joiners,
           joined: updatedOrders.find(o => o.id === orderData.id)?.joined
         });
+        console.log('✅ 訂單狀態已更新為 accepted:', orderData.id);
         
         // 更新留言的接單狀態（找到被接單的留言並同步）
         // 更新所有相關留言的狀態到後端

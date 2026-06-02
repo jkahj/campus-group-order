@@ -205,50 +205,67 @@ export default function HistoryScreen() {
       // 載入留言數據
       const comments = JSON.parse(await AsyncStorage.getItem('comments')) || {};
       
-      // 從資料庫載入評價資料（針對參與訂單）
+      // 從資料庫載入留言資料（包含評價和 accepted 狀態）
       try {
         if (userId !== 'me') {
-          // 為每個訂單載入評價資料
+          // 為每個訂單載入留言資料
           await Promise.all(parsed.map(async (order) => {
             try {
               const orderComments = await apiService.getCommentsByOrder(order.id);
               if (Array.isArray(orderComments)) {
-                // 找到當前用戶的留言
-                const userComment = orderComments.find(c => 
-                  String(c.commenter_id) === String(userId) || 
-                  String(c.commenterId) === String(userId)
+                // 找到當前用戶的留言（排除回覆）
+                const userComments = orderComments.filter(c => 
+                  (String(c.commenter_id) === String(userId) || 
+                   String(c.commenterId) === String(userId)) &&
+                  !(c.is_reply || c.isReply) // 排除回覆
                 );
                 
-                // 如果有評價資料，更新到本地 comments
-                if (userComment && (userComment.rating || userComment.rating_comment)) {
+                if (userComments.length > 0) {
                   if (!comments[order.id]) {
                     comments[order.id] = [];
                   }
-                  // 找到或創建對應的留言記錄
-                  let localComment = comments[order.id].find(c => 
-                    c.id === userComment.id || 
-                    c.commenterId === userId ||
-                    c.commenterId === 'me'
-                  );
                   
-                  if (localComment) {
-                    // 更新評價資料
-                    localComment.rating = userComment.rating || localComment.rating;
-                    localComment.ratingComment = userComment.rating_comment || userComment.ratingComment || localComment.ratingComment;
-                  } else {
-                    // 如果本地沒有，添加評價資料
-                    comments[order.id].push({
-                      id: userComment.id,
-                      commenterId: userId,
-                      rating: userComment.rating,
-                      ratingComment: userComment.rating_comment || userComment.ratingComment
-                    });
-                  }
+                  // 處理每個用戶留言
+                  userComments.forEach(userComment => {
+                    // 找到或創建對應的本地留言記錄
+                    let localComment = comments[order.id].find(c => 
+                      c.id === userComment.id || 
+                      (c.commenterId === userId && !c.id) ||
+                      (c.commenterId === 'me' && !c.id)
+                    );
+                    
+                    if (localComment) {
+                      // 更新本地留言的狀態（包括 accepted 狀態）
+                      localComment.accepted = userComment.accepted || localComment.accepted;
+                      localComment.acceptedAt = userComment.accepted_at || userComment.acceptedAt || localComment.acceptedAt;
+                      localComment.deliveryStatus = userComment.delivery_status || userComment.deliveryStatus || localComment.deliveryStatus;
+                      // 更新評價資料
+                      if (userComment.rating || userComment.rating_comment) {
+                        localComment.rating = userComment.rating || localComment.rating;
+                        localComment.ratingComment = userComment.rating_comment || userComment.ratingComment || localComment.ratingComment;
+                      }
+                    } else {
+                      // 如果本地沒有，創建新的留言記錄（包含 accepted 狀態）
+                      const newComment = {
+                        id: userComment.id,
+                        commenterId: userId,
+                        accepted: userComment.accepted || false,
+                        acceptedAt: userComment.accepted_at || userComment.acceptedAt,
+                        deliveryStatus: userComment.delivery_status || userComment.deliveryStatus || 'pending',
+                        text: userComment.text || '',
+                        timestamp: userComment.timestamp || Date.now(),
+                        isReply: userComment.is_reply || userComment.isReply || false,
+                        rating: userComment.rating,
+                        ratingComment: userComment.rating_comment || userComment.ratingComment
+                      };
+                      comments[order.id].push(newComment);
+                    }
+                  });
                 }
               }
             } catch (error) {
               // 靜默處理錯誤，不影響主要流程
-              console.log(`載入訂單 ${order.id} 的評價資料失敗:`, error.message);
+              console.log(`載入訂單 ${order.id} 的留言資料失敗:`, error.message);
             }
           }));
           
@@ -256,7 +273,7 @@ export default function HistoryScreen() {
           await AsyncStorage.setItem('comments', JSON.stringify(comments));
         }
       } catch (error) {
-        console.log('載入評價資料失敗:', error.message);
+        console.log('載入留言資料失敗:', error.message);
       }
       
       // 載入代購者給出的評價（針對發起訂單）
@@ -479,6 +496,49 @@ export default function HistoryScreen() {
         }
       }
       
+      // 從後端載入所有訂單的 order_joiners（用於參與訂單顯示）
+      const orderJoinersMap = {}; // { orderId: [joiners] }
+      if (userId !== 'me') {
+        try {
+          // 為每個訂單載入 order_joiners
+          await Promise.all(parsed.map(async (order) => {
+            try {
+              const joiners = await apiService.getOrderJoiners(order.id);
+              if (Array.isArray(joiners) && joiners.length > 0) {
+                // 轉換後端格式到前端格式
+                const formattedJoiners = joiners.map(joiner => ({
+                  id: joiner.user_id || joiner.userId,
+                  userId: joiner.user_id || joiner.userId,
+                  name: joiner.name,
+                  phone: joiner.phone || '',
+                  line: joiner.line || '',
+                  joinTime: joiner.join_time || joiner.joinTime,
+                  status: joiner.status || 'pending',
+                  commentId: joiner.comment_id || joiner.commentId,
+                  acceptedAt: joiner.accepted_at || joiner.acceptedAt
+                }));
+                orderJoinersMap[order.id] = formattedJoiners;
+                
+                // 合併到訂單的 joiners 中（避免重複）
+                if (!order.joiners || order.joiners.length === 0) {
+                  order.joiners = formattedJoiners;
+                } else {
+                  // 合併後端和本地的 joiners，避免重複
+                  const existingJoinerIds = new Set(order.joiners.map(j => j.userId || j.id));
+                  const newJoiners = formattedJoiners.filter(j => !existingJoinerIds.has(j.userId || j.id));
+                  order.joiners = [...order.joiners, ...newJoiners];
+                }
+              }
+            } catch (error) {
+              // 靜默處理錯誤，不影響主要流程
+              console.log(`載入訂單 ${order.id} 的參與者記錄失敗:`, error.message);
+            }
+          }));
+        } catch (error) {
+          console.log('載入訂單參與者記錄失敗:', error.message);
+        }
+      }
+
       const enrichedOrders = parsed.map(order => {
         const orderComments = comments[order.id] || [];
         
@@ -492,8 +552,13 @@ export default function HistoryScreen() {
         );
         
         // 找出當前用戶的參與者記錄（同時檢查 'me' 和當前用戶ID）
-        const userJoiner = order.joiners?.find(joiner => 
-          joiner.userId === 'me' || joiner.userId === userId
+        // 優先使用從後端載入的 joiners，如果沒有則使用本地的
+        const allJoiners = orderJoinersMap[order.id] || order.joiners || [];
+        const userJoiner = allJoiners.find(joiner => 
+          joiner.userId === 'me' || 
+          joiner.userId === userId ||
+          joiner.id === 'me' ||
+          joiner.id === userId
         );
         
         // 確定參與狀態

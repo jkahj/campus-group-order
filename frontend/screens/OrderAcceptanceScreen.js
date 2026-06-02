@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserTier, getTierInfo, getTierColor, getOrderSuggestion } from '../utils/userTierManager';
 import apiService from '../utils/apiService';
 import AuthManager from '../utils/authManager';
+import databaseService from '../utils/databaseService';
 
 export default function OrderAcceptanceScreen({ navigation, route }) {
   const { commentData, orderInfo } = route.params || {};
@@ -99,6 +100,7 @@ export default function OrderAcceptanceScreen({ navigation, route }) {
             
             return {
               ...order,
+              status: 'accepted', // 更新訂單狀態為 accepted
               joiners: [...(order.joiners || []), newJoiner],
               joined: (order.joined || 0) + 1
             };
@@ -112,6 +114,7 @@ export default function OrderAcceptanceScreen({ navigation, route }) {
             
             return {
               ...order,
+              status: 'accepted', // 更新訂單狀態為 accepted
               joiners: updatedJoiners
             };
           }
@@ -120,6 +123,95 @@ export default function OrderAcceptanceScreen({ navigation, route }) {
       });
       
       await AsyncStorage.setItem('orders', JSON.stringify(updatedOrders));
+
+      // 同步更新後端資料庫
+      try {
+        // 1. 更新留言的接單狀態到後端
+        const commentId = commentData.id;
+        if (commentId) {
+          // 驗證 commentId 是否有效（不是臨時 ID）
+          const commentIdValid = commentId && 
+            commentId.length > 5 &&
+            !commentId.includes('_index') &&
+            (commentId.match(/^comment_\d+_[a-z0-9]+$/) || // 允許格式：comment_1234567890_abc12
+             !commentId.startsWith('comment_')); // 或者不是以 comment_ 開頭的其他有效 ID
+          
+          if (commentIdValid) {
+            try {
+              await databaseService.updateComment(commentId, {
+                accepted: true,
+                accepted_at: Date.now(),
+                delivery_status: 'accepted'
+              });
+              console.log('✅ 留言接單狀態已同步到後端資料庫:', commentId);
+            } catch (updateError) {
+              // 如果是 404 錯誤，可能是留言不存在於資料庫中（可能是本地創建的留言）
+              if (updateError?.status === 404 || updateError?.message?.includes('404')) {
+                console.log('⚠️ 留言不存在於後端資料庫（可能是本地創建的留言）:', commentId);
+              } else {
+                console.warn('⚠️ 更新留言到後端失敗:', updateError?.message || updateError);
+              }
+            }
+          } else {
+            console.log('⚠️ 跳過更新留言（commentId 無效或為臨時 ID）:', commentId);
+          }
+        }
+
+        // 2. 更新訂單狀態為 accepted
+        try {
+          await databaseService.updateOrder(orderInfo.id, {
+            status: 'accepted'
+          });
+          console.log('✅ 訂單狀態已更新為 accepted:', orderInfo.id);
+        } catch (orderUpdateError) {
+          console.warn('⚠️ 更新訂單狀態到後端失敗:', orderUpdateError?.message || orderUpdateError);
+        }
+
+        // 3. 創建或更新 order_joiner 記錄到後端
+        const updatedOrder = updatedOrders.find(o => o.id === orderInfo.id);
+        if (updatedOrder) {
+          const newJoiner = updatedOrder.joiners?.find(
+            joiner => joiner.commentId === commentData.id || 
+                     joiner.id === commentData.commenterId ||
+                     joiner.userId === commentData.commenterId
+          );
+
+          if (newJoiner) {
+            try {
+              // 生成 order_joiner 的唯一 ID
+              const joinerId = `joiner_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+              
+              const joinerData = {
+                id: joinerId,
+                order_id: orderInfo.id,
+                user_id: commentData.commenterId,
+                name: commentData.commenterName,
+                phone: commentData.commenterPhone || null,
+                line: commentData.commenterLine || null,
+                join_time: newJoiner.joinTime || Date.now(),
+                status: 'accepted',
+                comment_id: commentData.id || null,
+                accepted_at: newJoiner.acceptedAt || Date.now()
+              };
+
+              await apiService.createOrderJoiner(joinerData);
+              console.log('✅ 訂單參與者記錄已同步到後端資料庫:', joinerId);
+            } catch (joinerError) {
+              // 如果是重複記錄錯誤，可能是已經存在，嘗試更新
+              if (joinerError?.message?.includes('Duplicate') || 
+                  joinerError?.message?.includes('already exists') ||
+                  joinerError?.status === 409) {
+                console.log('⚠️ 訂單參與者記錄已存在，跳過創建');
+              } else {
+                console.warn('⚠️ 創建訂單參與者記錄到後端失敗:', joinerError?.message || joinerError);
+              }
+            }
+          }
+        }
+      } catch (syncError) {
+        // 後端同步失敗不影響本地功能，只記錄警告
+        console.warn('⚠️ 同步到後端資料庫時發生錯誤（不影響本地功能）:', syncError?.message || syncError);
+      }
 
       // 發送接單確認通知給留言者
       const { sendNotificationToCommenter, sendNotificationToOrderCreator } = require('../utils/notificationHelper');

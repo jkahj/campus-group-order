@@ -57,7 +57,7 @@ class Order(Base):
     item_price = Column(Integer, comment='商品總金額（單位：元）')
     detail_image = Column(Text, comment='代購明細圖片（Base64 或 圖片 URL）')
     joined = Column(Integer, default=0, comment='參與人數')
-    status = Column(Enum('preparing', 'delivering', 'completed', 'cancelled', 'expired'), default='preparing', comment='訂單狀態')
+    status = Column(Enum('preparing', 'accepted', 'delivering', 'completed', 'cancelled', 'expired'), default='preparing', comment='訂單狀態')
     color = Column(String(20), default='green', comment='訂單顏色標記')
     comments = Column(Integer, default=0, comment='留言數量')
     liked = Column(Boolean, default=False, comment='是否已點讚')
